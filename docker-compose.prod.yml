@@ -1,0 +1,86 @@
+version: "3.8"
+
+services:
+  # PostgreSQL Database
+  db:
+    image: postgres:16-alpine
+    container_name: ministack-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - ministack-internal
+
+  # Redis Cache
+  redis:
+    image: redis:7-alpine
+    container_name: ministack-redis
+    restart: unless-stopped
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - ministack-internal
+
+  # FastAPI Backend
+  backend:
+    build: ./backend
+    container_name: ministack-backend
+    restart: unless-stopped
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
+      - REDIS_URL=redis://redis:6379/0
+      - BOT_TOKEN=${BOT_TOKEN}
+      - BOT_USERNAME=${BOT_USERNAME}
+      - SECRET_KEY=${SECRET_KEY}
+      - JWT_SECRET=${JWT_SECRET}
+      - DEBUG=false
+      - CORS_ORIGINS=${CORS_ORIGINS}
+      - APP_URL=${APP_URL}
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - ministack-internal
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.ministack-api.rule=Host(`${APP_DOMAIN}`) && PathPrefix(`/api`)"
+      - "traefik.http.services.ministack-api.loadbalancer.server.port=8000"
+
+  # React Frontend
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        - VITE_API_URL=${APP_URL}
+    container_name: ministack-frontend
+    restart: unless-stopped
+    networks:
+      - ministack-internal
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.ministack-web.rule=Host(`${APP_DOMAIN}`)"
+      - "traefik.http.services.ministack-web.loadbalancer.server.port=80"
+
+volumes:
+  postgres_data:
+  redis_data:
+
+networks:
+  ministack-internal:
+    driver: bridge
