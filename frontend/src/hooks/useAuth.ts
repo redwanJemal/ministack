@@ -42,7 +42,7 @@ export function useAuth() {
           setAccessToken(result.access_token);
           setUser(result.user);
         } else if (!isInTelegram) {
-          // Dev mode - create mock user
+          // Dev mode - create mock admin user
           console.log('Dev mode: Creating mock user');
           setUser({
             id: 'dev-user',
@@ -61,6 +61,7 @@ export function useAuth() {
             total_sales: 0,
             total_listings: 0,
             is_verified_seller: false,
+            is_admin: true,  // Dev is admin
             settings: {},
           });
         }

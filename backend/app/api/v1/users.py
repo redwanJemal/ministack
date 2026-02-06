@@ -6,6 +6,8 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
 from app.api.deps import CurrentUser
+from app.core.config import settings
+from app.models.user import User
 
 router = APIRouter()
 
@@ -28,10 +30,33 @@ class UserResponse(BaseModel):
     total_sales: int
     total_listings: int
     is_verified_seller: bool
-    settings: dict
+    is_admin: bool = False
 
     class Config:
         from_attributes = True
+
+
+def user_to_response(user: User) -> UserResponse:
+    """Convert User model to UserResponse."""
+    return UserResponse(
+        id=str(user.id),
+        telegram_id=user.telegram_id,
+        username=user.username,
+        first_name=user.first_name,
+        last_name=user.last_name,
+        photo_url=user.photo_url,
+        is_premium=user.is_premium,
+        language_code=user.language_code,
+        phone=user.phone,
+        is_phone_verified=user.is_phone_verified,
+        city=user.city,
+        area=user.area,
+        rating=user.rating,
+        total_sales=user.total_sales,
+        total_listings=user.total_listings,
+        is_verified_seller=user.is_verified_seller,
+        is_admin=user.telegram_id in settings.admin_ids,
+    )
 
 
 class UpdateSettingsRequest(BaseModel):
@@ -53,25 +78,7 @@ class VerifyPhoneRequest(BaseModel):
 @router.get("/me", response_model=UserResponse)
 async def get_me(user: CurrentUser):
     """Get current user profile."""
-    return UserResponse(
-        id=str(user.id),
-        telegram_id=user.telegram_id,
-        username=user.username,
-        first_name=user.first_name,
-        last_name=user.last_name,
-        photo_url=user.photo_url,
-        is_premium=user.is_premium,
-        language_code=user.language_code,
-        phone=user.phone,
-        is_phone_verified=user.is_phone_verified,
-        city=user.city,
-        area=user.area,
-        rating=user.rating,
-        total_sales=user.total_sales,
-        total_listings=user.total_listings,
-        is_verified_seller=user.is_verified_seller,
-        settings=user.settings or {},
-    )
+    return user_to_response(user)
 
 
 @router.patch("/me", response_model=UserResponse)
@@ -85,25 +92,7 @@ async def update_profile(
     if body.area:
         user.area = body.area
 
-    return UserResponse(
-        id=str(user.id),
-        telegram_id=user.telegram_id,
-        username=user.username,
-        first_name=user.first_name,
-        last_name=user.last_name,
-        photo_url=user.photo_url,
-        is_premium=user.is_premium,
-        language_code=user.language_code,
-        phone=user.phone,
-        is_phone_verified=user.is_phone_verified,
-        city=user.city,
-        area=user.area,
-        rating=user.rating,
-        total_sales=user.total_sales,
-        total_listings=user.total_listings,
-        is_verified_seller=user.is_verified_seller,
-        settings=user.settings or {},
-    )
+    return user_to_response(user)
 
 
 @router.post("/me/verify-phone", response_model=UserResponse)
@@ -129,25 +118,7 @@ async def verify_phone(
     user.is_phone_verified = True
     user.phone_verified_at = datetime.now(UTC)
     
-    return UserResponse(
-        id=str(user.id),
-        telegram_id=user.telegram_id,
-        username=user.username,
-        first_name=user.first_name,
-        last_name=user.last_name,
-        photo_url=user.photo_url,
-        is_premium=user.is_premium,
-        language_code=user.language_code,
-        phone=user.phone,
-        is_phone_verified=user.is_phone_verified,
-        city=user.city,
-        area=user.area,
-        rating=user.rating,
-        total_sales=user.total_sales,
-        total_listings=user.total_listings,
-        is_verified_seller=user.is_verified_seller,
-        settings=user.settings or {},
-    )
+    return user_to_response(user)
 
 
 @router.patch("/me/settings", response_model=UserResponse)
@@ -161,22 +132,4 @@ async def update_settings(
     current_settings.update(body.settings)
     user.settings = current_settings
 
-    return UserResponse(
-        id=str(user.id),
-        telegram_id=user.telegram_id,
-        username=user.username,
-        first_name=user.first_name,
-        last_name=user.last_name,
-        photo_url=user.photo_url,
-        is_premium=user.is_premium,
-        language_code=user.language_code,
-        phone=user.phone,
-        is_phone_verified=user.is_phone_verified,
-        city=user.city,
-        area=user.area,
-        rating=user.rating,
-        total_sales=user.total_sales,
-        total_listings=user.total_listings,
-        is_verified_seller=user.is_verified_seller,
-        settings=user.settings,
-    )
+    return user_to_response(user)

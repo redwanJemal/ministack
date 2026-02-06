@@ -146,7 +146,8 @@ export interface User {
   total_sales: number;
   total_listings: number;
   is_verified_seller: boolean;
-  settings: Record<string, any>;
+  is_admin: boolean;
+  settings?: Record<string, any>;
 }
 
 export interface Category {

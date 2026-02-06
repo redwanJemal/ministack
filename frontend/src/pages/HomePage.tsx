@@ -164,7 +164,7 @@ export default function HomePage() {
             } catch (e) {
               console.error('Failed to seed:', e);
             }
-          }} isAuthenticated={isAuthenticated} />
+          }} isAdmin={user?.is_admin || false} />
         ) : (
           <div className="grid grid-cols-2 gap-3">
             {listings.map((listing) => (
@@ -285,10 +285,10 @@ function ListingCard({ listing, formatPrice, getTimeAgo }: ListingCardProps) {
 
 interface EmptyStateProps {
   onSeedDemo: () => Promise<void>;
-  isAuthenticated: boolean;
+  isAdmin: boolean;
 }
 
-function EmptyState({ onSeedDemo, isAuthenticated }: EmptyStateProps) {
+function EmptyState({ onSeedDemo, isAdmin }: EmptyStateProps) {
   const [seeding, setSeeding] = useState(false);
 
   const handleSeed = async () => {
@@ -303,7 +303,8 @@ function EmptyState({ onSeedDemo, isAuthenticated }: EmptyStateProps) {
       <p className="text-tg-text text-lg font-medium">ምንም ዕቃ አልተገኘም</p>
       <p className="text-tg-hint text-sm mt-1">No listings yet</p>
       
-      {isAuthenticated && (
+      {/* Admin only: Seed demo button */}
+      {isAdmin && (
         <button
           onClick={handleSeed}
           disabled={seeding}

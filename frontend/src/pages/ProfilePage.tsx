@@ -253,16 +253,19 @@ export default function ProfilePage({ onBack }: ProfilePageProps) {
         />
       </div>
 
-      {/* Debug Info */}
-      <div className="mt-8 mx-4 p-4 bg-tg-secondary-bg rounded-xl">
-        <h3 className="text-sm font-medium text-tg-hint mb-2">Debug Info</h3>
-        <div className="space-y-1 text-xs font-mono text-tg-hint">
-          <p>ID: {user.id.slice(0, 8)}...</p>
-          <p>TG ID: {user.telegram_id}</p>
-          <p>Phone: {user.phone || 'Not set'}</p>
-          <p>Verified: {user.is_phone_verified ? 'Yes' : 'No'}</p>
+      {/* Debug Info - Admin only */}
+      {user.is_admin && (
+        <div className="mt-8 mx-4 p-4 bg-tg-secondary-bg rounded-xl">
+          <h3 className="text-sm font-medium text-tg-hint mb-2">🔧 Admin Debug</h3>
+          <div className="space-y-1 text-xs font-mono text-tg-hint">
+            <p>ID: {user.id.slice(0, 8)}...</p>
+            <p>TG ID: {user.telegram_id}</p>
+            <p>Phone: {user.phone || 'Not set'}</p>
+            <p>Verified: {user.is_phone_verified ? 'Yes' : 'No'}</p>
+            <p>Admin: ✅</p>
+          </div>
         </div>
-      </div>
+      )}
     </div>
   );
 }
