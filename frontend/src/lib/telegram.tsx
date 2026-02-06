@@ -142,7 +142,7 @@ const TelegramContext = createContext<TelegramContextType | null>(null);
 export function TelegramProvider({ children }: { children: ReactNode }) {
   const [isReady, setIsReady] = useState(false);
 
-  const webApp = typeof window !== 'undefined' ? window.Telegram?.WebApp : null;
+  const webApp = typeof window !== 'undefined' ? window.Telegram?.WebApp ?? null : null;
   const isInTelegram = !!webApp?.initData;
 
   useEffect(() => {
