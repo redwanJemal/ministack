@@ -1,7 +1,7 @@
 import { useNavigate } from 'react-router-dom';
 import { useTelegram, useBackButton } from '@/lib/telegram';
-import { User, Star, Globe, LogOut } from 'lucide-react';
-import { authApi } from '@/lib/api';
+import { User, Star, Globe, LogOut, RefreshCw } from 'lucide-react';
+import { setAccessToken } from '@/lib/api';
 import { toast } from 'sonner';
 
 interface Props {
@@ -19,7 +19,7 @@ interface Props {
 
 export function ProfilePage({ user }: Props) {
   const navigate = useNavigate();
-  const { haptic, showConfirm } = useTelegram();
+  const { haptic, showConfirm, close } = useTelegram();
 
   // Setup back button
   useBackButton(() => {
@@ -29,12 +29,23 @@ export function ProfilePage({ user }: Props) {
 
   const handleLogout = async () => {
     haptic.impact('medium');
-    const confirmed = await showConfirm('Are you sure you want to logout?');
+    const confirmed = await showConfirm('Are you sure you want to logout? You will need to reopen the app.');
     if (confirmed) {
-      authApi.logout();
-      toast.success('Logged out successfully');
-      window.location.reload();
+      // Clear token
+      setAccessToken(null);
+      localStorage.clear();
+      toast.success('Logged out! Closing app...');
+      // Close the mini app - user will need to reopen
+      setTimeout(() => {
+        close();
+      }, 1000);
     }
+  };
+
+  const handleRefresh = () => {
+    haptic.impact('light');
+    setAccessToken(null);
+    window.location.reload();
   };
 
   if (!user) {
@@ -106,11 +117,19 @@ export function ProfilePage({ user }: Props) {
       {/* Actions */}
       <div className="space-y-3">
         <button
+          onClick={handleRefresh}
+          className="w-full p-4 bg-tg-secondary-bg rounded-xl flex items-center justify-center gap-2 active:scale-[0.98] transition-transform"
+        >
+          <RefreshCw className="w-5 h-5" />
+          <span className="font-medium">Refresh Session</span>
+        </button>
+        
+        <button
           onClick={handleLogout}
           className="w-full p-4 bg-tg-destructive/10 text-tg-destructive rounded-xl flex items-center justify-center gap-2 active:scale-[0.98] transition-transform"
         >
           <LogOut className="w-5 h-5" />
-          <span className="font-medium">Logout</span>
+          <span className="font-medium">Logout & Close</span>
         </button>
       </div>
 

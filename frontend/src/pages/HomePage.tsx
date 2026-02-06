@@ -1,6 +1,6 @@
 import { Link } from 'react-router-dom';
 import { useTelegram } from '@/lib/telegram';
-import { User, Settings, Zap, Star } from 'lucide-react';
+import { User, Settings, Zap, Star, CheckCircle, Database } from 'lucide-react';
 
 interface Props {
   user: {
@@ -92,19 +92,33 @@ export function HomePage({ user }: Props) {
 
       {/* Info Section */}
       <div className="mt-8 p-4 bg-tg-secondary-bg rounded-xl">
-        <h3 className="font-medium mb-2">App Info</h3>
+        <h3 className="font-medium mb-2 flex items-center gap-2">
+          <Database className="w-4 h-4" />
+          Session Info
+        </h3>
         <div className="space-y-2 text-sm">
+          <div className="flex justify-between items-center">
+            <span className="text-tg-hint">Auth Status</span>
+            <span className="flex items-center gap-1 text-green-500">
+              <CheckCircle className="w-4 h-4" />
+              {user?.id === 'dev-user' ? 'Demo Mode' : 'Authenticated'}
+            </span>
+          </div>
           <div className="flex justify-between">
             <span className="text-tg-hint">Theme</span>
             <span className="capitalize">{colorScheme}</span>
           </div>
           <div className="flex justify-between">
-            <span className="text-tg-hint">User ID</span>
-            <span className="font-mono">{user?.telegram_id || 'N/A'}</span>
+            <span className="text-tg-hint">Telegram ID</span>
+            <span className="font-mono text-xs">{user?.telegram_id || 'N/A'}</span>
           </div>
           <div className="flex justify-between">
             <span className="text-tg-hint">Username</span>
             <span>@{user?.username || 'none'}</span>
+          </div>
+          <div className="flex justify-between">
+            <span className="text-tg-hint">Internal ID</span>
+            <span className="font-mono text-xs">{user?.id?.slice(0, 8) || 'N/A'}...</span>
           </div>
         </div>
       </div>

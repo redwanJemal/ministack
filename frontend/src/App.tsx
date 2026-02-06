@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Routes, Route } from 'react-router-dom';
 import { useTelegram } from './lib/telegram';
-import { authApi, getAccessToken } from './lib/api';
+import { authApi, getAccessToken, setAccessToken } from './lib/api';
 import { HomePage } from './pages/HomePage';
 import { ProfilePage } from './pages/ProfilePage';
 import { LoadingScreen } from './components/LoadingScreen';
@@ -17,7 +17,7 @@ interface User {
 }
 
 export default function App() {
-  const { isReady, initData, isInTelegram } = useTelegram();
+  const { isReady, initData, isInTelegram, user: tgUser } = useTelegram();
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -26,27 +26,44 @@ export default function App() {
     async function authenticate() {
       if (!isReady) return;
 
+      console.log('[Auth] Starting authentication...', { 
+        isInTelegram, 
+        hasInitData: !!initData,
+        initDataLength: initData?.length,
+        tgUser: tgUser?.first_name
+      });
+
       try {
-        // Check for existing token
+        // Check for existing valid token
         const existingToken = getAccessToken();
         if (existingToken) {
+          console.log('[Auth] Found existing token, validating...');
           try {
             const userData = await authApi.getMe();
+            console.log('[Auth] Token valid, user:', userData.first_name);
             setUser(userData);
             setIsLoading(false);
             return;
-          } catch {
-            // Token invalid, continue to login
+          } catch (e) {
+            console.log('[Auth] Token invalid, clearing...', e);
+            setAccessToken(null);
           }
         }
 
         // Login with Telegram initData
         if (initData) {
-          const response = await authApi.login(initData);
-          setUser(response.user);
+          console.log('[Auth] Logging in with Telegram initData...');
+          try {
+            const response = await authApi.login(initData);
+            console.log('[Auth] Login successful:', response.user.first_name);
+            setUser(response.user);
+          } catch (e) {
+            console.error('[Auth] Login failed:', e);
+            throw e;
+          }
         } else if (!isInTelegram) {
           // Development mode without Telegram
-          console.log('Running outside Telegram - using mock user');
+          console.log('[Auth] Dev mode - no Telegram, using mock user');
           setUser({
             id: 'dev-user',
             telegram_id: 123456789,
@@ -57,10 +74,11 @@ export default function App() {
             is_premium: false,
           });
         } else {
-          setError('Unable to authenticate with Telegram');
+          console.error('[Auth] In Telegram but no initData!');
+          setError('Unable to authenticate with Telegram. Please try reopening the app.');
         }
       } catch (err) {
-        console.error('Auth error:', err);
+        console.error('[Auth] Error:', err);
         setError('Authentication failed. Please try again.');
       } finally {
         setIsLoading(false);
@@ -68,7 +86,7 @@ export default function App() {
     }
 
     authenticate();
-  }, [isReady, initData, isInTelegram]);
+  }, [isReady, initData, isInTelegram, tgUser]);
 
   if (isLoading || !isReady) {
     return <LoadingScreen />;
