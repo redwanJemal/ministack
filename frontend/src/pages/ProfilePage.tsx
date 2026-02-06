@@ -1,142 +1,244 @@
-import { useNavigate } from 'react-router-dom';
-import { useTelegram, useBackButton } from '@/lib/telegram';
-import { User, Star, Globe, LogOut, RefreshCw } from 'lucide-react';
+import { useState } from 'react';
+import { 
+  ArrowLeft, Phone, MapPin, Star, Package, 
+  ShoppingBag, Heart, Settings, LogOut, 
+  CheckCircle, AlertCircle, ChevronRight
+} from 'lucide-react';
+import { useTelegram } from '@/lib/telegram';
+import { useAuth } from '@/hooks/useAuth';
 import { setAccessToken } from '@/lib/api';
-import { toast } from 'sonner';
 
-interface Props {
-  user: {
-    id: string;
-    telegram_id: number;
-    username: string | null;
-    first_name: string;
-    last_name: string | null;
-    photo_url: string | null;
-    is_premium: boolean;
-    language_code?: string | null;
-  } | null;
+interface ProfilePageProps {
+  onBack?: () => void;
 }
 
-export function ProfilePage({ user }: Props) {
-  const navigate = useNavigate();
-  const { haptic, showConfirm, close } = useTelegram();
+export default function ProfilePage({ onBack }: ProfilePageProps) {
+  const { webApp, haptic } = useTelegram();
+  const { user, refreshUser } = useAuth();
+  const [verifying, setVerifying] = useState(false);
 
-  // Setup back button
-  useBackButton(() => {
-    haptic.selection();
-    navigate(-1);
-  });
-
-  const handleLogout = async () => {
+  const handleVerifyPhone = async () => {
+    if (!webApp || !webApp.requestContact) {
+      alert('Phone verification is only available in Telegram');
+      return;
+    }
+    
     haptic.impact('medium');
-    const confirmed = await showConfirm('Are you sure you want to logout? You will need to reopen the app.');
-    if (confirmed) {
-      // Clear token
-      setAccessToken(null);
-      localStorage.clear();
-      toast.success('Logged out! Closing app...');
-      // Close the mini app - user will need to reopen
-      setTimeout(() => {
-        close();
-      }, 1000);
+    setVerifying(true);
+
+    try {
+      // Request contact from Telegram
+      webApp.requestContact((sent: boolean) => {
+        if (sent) {
+          // Contact will be sent via WebApp.initDataUnsafe.user after callback
+          // For now, show a message
+          haptic.notification('success');
+          alert('ስልክዎ ተረጋግጧል! / Phone verified!');
+          refreshUser();
+        } else {
+          haptic.notification('error');
+        }
+        setVerifying(false);
+      });
+    } catch (error) {
+      console.error('Failed to request contact:', error);
+      setVerifying(false);
     }
   };
 
-  const handleRefresh = () => {
-    haptic.impact('light');
+  const handleLogout = () => {
+    haptic.impact('medium');
     setAccessToken(null);
-    window.location.reload();
+    webApp?.close();
   };
 
   if (!user) {
     return (
-      <div className="container py-6">
-        <p className="text-center text-tg-hint">Not logged in</p>
+      <div className="min-h-screen flex items-center justify-center">
+        <p className="text-tg-hint">Loading...</p>
       </div>
     );
   }
 
   return (
-    <div className="container py-6">
-      {/* Profile Header */}
-      <div className="flex flex-col items-center mb-8">
-        <div className="w-24 h-24 rounded-full bg-tg-secondary-bg flex items-center justify-center mb-4 overflow-hidden">
-          {user.photo_url ? (
-            <img
-              src={user.photo_url}
-              alt={user.first_name}
-              className="w-full h-full object-cover"
-            />
-          ) : (
-            <User className="w-12 h-12 text-tg-hint" />
-          )}
-        </div>
-        <h1 className="text-xl font-bold">
-          {user.first_name} {user.last_name}
-        </h1>
-        {user.username && (
-          <p className="text-tg-hint">@{user.username}</p>
+    <div className="min-h-screen pb-20">
+      {/* Header */}
+      <div className="bg-tg-secondary-bg px-4 py-4">
+        {onBack && (
+          <button
+            onClick={onBack}
+            className="flex items-center gap-2 text-tg-link mb-4"
+          >
+            <ArrowLeft className="w-5 h-5" />
+            <span>ተመለስ / Back</span>
+          </button>
         )}
-        {user.is_premium && (
-          <div className="flex items-center gap-1 mt-2 px-3 py-1 bg-gradient-to-r from-yellow-500/20 to-orange-500/20 rounded-full">
-            <Star className="w-4 h-4 text-yellow-500 fill-yellow-500" />
-            <span className="text-sm font-medium text-yellow-600">Premium</span>
+        
+        {/* Profile Info */}
+        <div className="flex items-center gap-4">
+          <div className="w-20 h-20 rounded-full bg-tg-button flex items-center justify-center text-2xl text-tg-button-text font-bold">
+            {user.first_name[0]}
           </div>
-        )}
+          <div className="flex-1">
+            <h1 className="text-xl font-bold text-tg-text">
+              {user.first_name} {user.last_name || ''}
+            </h1>
+            {user.username && (
+              <p className="text-tg-hint">@{user.username}</p>
+            )}
+            <div className="flex items-center gap-2 mt-1">
+              {user.is_phone_verified ? (
+                <span className="flex items-center gap-1 text-green-500 text-sm">
+                  <CheckCircle className="w-4 h-4" />
+                  የተረጋገጠ / Verified
+                </span>
+              ) : (
+                <span className="flex items-center gap-1 text-orange-500 text-sm">
+                  <AlertCircle className="w-4 h-4" />
+                  ያልተረጋገጠ / Not Verified
+                </span>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* Stats */}
+        <div className="grid grid-cols-3 gap-4 mt-6">
+          <div className="text-center">
+            <p className="text-2xl font-bold text-tg-text">{user.total_listings}</p>
+            <p className="text-xs text-tg-hint">ዕቃዎች</p>
+          </div>
+          <div className="text-center">
+            <p className="text-2xl font-bold text-tg-text">{user.total_sales}</p>
+            <p className="text-xs text-tg-hint">ሽያጮች</p>
+          </div>
+          <div className="text-center">
+            <p className="text-2xl font-bold text-tg-text flex items-center justify-center gap-1">
+              <Star className="w-4 h-4 text-yellow-500" />
+              {user.rating > 0 ? user.rating.toFixed(1) : '-'}
+            </p>
+            <p className="text-xs text-tg-hint">ደረጃ</p>
+          </div>
+        </div>
       </div>
 
-      {/* Profile Info */}
-      <div className="bg-tg-secondary-bg rounded-xl overflow-hidden mb-6">
-        <div className="p-4 border-b border-tg-bg/50">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-full bg-tg-button/10 flex items-center justify-center">
-              <User className="w-5 h-5 text-tg-button" />
-            </div>
+      {/* Phone Verification CTA */}
+      {!user.is_phone_verified && (
+        <div className="mx-4 mt-4 p-4 bg-orange-500/10 border border-orange-500/20 rounded-xl">
+          <div className="flex items-start gap-3">
+            <Phone className="w-6 h-6 text-orange-500 flex-shrink-0 mt-0.5" />
             <div className="flex-1">
-              <p className="text-sm text-tg-hint">Telegram ID</p>
-              <p className="font-mono">{user.telegram_id}</p>
+              <h3 className="font-medium text-tg-text">ስልክዎን ያረጋግጡ</h3>
+              <p className="text-sm text-tg-hint mt-1">
+                ዕቃ ለመሸጥ ስልክ ቁጥርዎን ማረጋገጥ ያስፈልጋል
+              </p>
+              <p className="text-xs text-tg-hint mt-0.5">
+                Verify your phone to start selling
+              </p>
+              <button
+                onClick={handleVerifyPhone}
+                disabled={verifying}
+                className="mt-3 px-4 py-2 bg-orange-500 text-white rounded-lg text-sm font-medium disabled:opacity-50"
+              >
+                {verifying ? 'እየተጫነ...' : '📱 ስልክ አጋራ / Share Phone'}
+              </button>
             </div>
           </div>
         </div>
-        
-        {user.language_code && (
-          <div className="p-4">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-full bg-green-500/10 flex items-center justify-center">
-                <Globe className="w-5 h-5 text-green-500" />
-              </div>
-              <div className="flex-1">
-                <p className="text-sm text-tg-hint">Language</p>
-                <p className="uppercase">{user.language_code}</p>
-              </div>
-            </div>
-          </div>
-        )}
-      </div>
+      )}
 
-      {/* Actions */}
-      <div className="space-y-3">
-        <button
-          onClick={handleRefresh}
-          className="w-full p-4 bg-tg-secondary-bg rounded-xl flex items-center justify-center gap-2 active:scale-[0.98] transition-transform"
-        >
-          <RefreshCw className="w-5 h-5" />
-          <span className="font-medium">Refresh Session</span>
-        </button>
+      {/* Menu Items */}
+      <div className="mt-4 px-4 space-y-2">
+        <MenuItem
+          icon={<Package className="w-5 h-5" />}
+          label="ዕቃዎቼ / My Listings"
+          badge={user.total_listings > 0 ? String(user.total_listings) : undefined}
+          onClick={() => alert('Coming soon: My Listings')}
+        />
+        <MenuItem
+          icon={<Heart className="w-5 h-5" />}
+          label="የተወደዱ / Favorites"
+          onClick={() => alert('Coming soon: Favorites')}
+        />
+        <MenuItem
+          icon={<ShoppingBag className="w-5 h-5" />}
+          label="ግዢዎቼ / My Purchases"
+          onClick={() => alert('Coming soon: Purchases')}
+        />
         
-        <button
+        <div className="h-2" />
+        
+        <MenuItem
+          icon={<MapPin className="w-5 h-5" />}
+          label="አካባቢ / Location"
+          value={user.area || user.city}
+          onClick={() => alert('Coming soon: Change Location')}
+        />
+        <MenuItem
+          icon={<Settings className="w-5 h-5" />}
+          label="ቅንብሮች / Settings"
+          onClick={() => alert('Coming soon: Settings')}
+        />
+        
+        <div className="h-2" />
+        
+        <MenuItem
+          icon={<LogOut className="w-5 h-5 text-red-500" />}
+          label="ውጣ / Logout"
+          labelClassName="text-red-500"
           onClick={handleLogout}
-          className="w-full p-4 bg-tg-destructive/10 text-tg-destructive rounded-xl flex items-center justify-center gap-2 active:scale-[0.98] transition-transform"
-        >
-          <LogOut className="w-5 h-5" />
-          <span className="font-medium">Logout & Close</span>
-        </button>
+        />
       </div>
 
-      {/* App Version */}
-      <p className="text-center text-tg-hint text-xs mt-8">
-        MiniStack v1.0.0
-      </p>
+      {/* Debug Info */}
+      <div className="mt-8 mx-4 p-4 bg-tg-secondary-bg rounded-xl">
+        <h3 className="text-sm font-medium text-tg-hint mb-2">Debug Info</h3>
+        <div className="space-y-1 text-xs font-mono text-tg-hint">
+          <p>ID: {user.id.slice(0, 8)}...</p>
+          <p>TG ID: {user.telegram_id}</p>
+          <p>Phone: {user.phone || 'Not set'}</p>
+          <p>Verified: {user.is_phone_verified ? 'Yes' : 'No'}</p>
+        </div>
+      </div>
     </div>
+  );
+}
+
+interface MenuItemProps {
+  icon: React.ReactNode;
+  label: string;
+  value?: string;
+  badge?: string;
+  labelClassName?: string;
+  onClick?: () => void;
+}
+
+function MenuItem({ icon, label, value, badge, labelClassName, onClick }: MenuItemProps) {
+  const { haptic } = useTelegram();
+
+  const handleClick = () => {
+    haptic.selection();
+    onClick?.();
+  };
+
+  return (
+    <button
+      onClick={handleClick}
+      className="w-full flex items-center gap-3 p-3 bg-tg-secondary-bg rounded-xl active:scale-[0.98] transition-transform"
+    >
+      <span className="text-tg-hint">{icon}</span>
+      <span className={`flex-1 text-left ${labelClassName || 'text-tg-text'}`}>
+        {label}
+      </span>
+      {badge && (
+        <span className="px-2 py-0.5 bg-tg-button text-tg-button-text text-xs rounded-full">
+          {badge}
+        </span>
+      )}
+      {value && (
+        <span className="text-tg-hint text-sm">{value}</span>
+      )}
+      <ChevronRight className="w-4 h-4 text-tg-hint" />
+    </button>
   );
 }

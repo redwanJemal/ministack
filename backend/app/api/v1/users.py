@@ -1,6 +1,8 @@
 """User endpoints."""
 
-from fastapi import APIRouter
+from datetime import UTC, datetime
+
+from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
 from app.api.deps import CurrentUser
@@ -18,6 +20,14 @@ class UserResponse(BaseModel):
     photo_url: str | None
     is_premium: bool
     language_code: str | None
+    phone: str | None
+    is_phone_verified: bool
+    city: str
+    area: str | None
+    rating: float
+    total_sales: int
+    total_listings: int
+    is_verified_seller: bool
     settings: dict
 
     class Config:
@@ -27,6 +37,17 @@ class UserResponse(BaseModel):
 class UpdateSettingsRequest(BaseModel):
     """Request to update user settings."""
     settings: dict
+
+
+class UpdateProfileRequest(BaseModel):
+    """Request to update user profile."""
+    city: str | None = None
+    area: str | None = None
+
+
+class VerifyPhoneRequest(BaseModel):
+    """Request to verify phone from Telegram contact share."""
+    phone_number: str
 
 
 @router.get("/me", response_model=UserResponse)
@@ -41,6 +62,90 @@ async def get_me(user: CurrentUser):
         photo_url=user.photo_url,
         is_premium=user.is_premium,
         language_code=user.language_code,
+        phone=user.phone,
+        is_phone_verified=user.is_phone_verified,
+        city=user.city,
+        area=user.area,
+        rating=user.rating,
+        total_sales=user.total_sales,
+        total_listings=user.total_listings,
+        is_verified_seller=user.is_verified_seller,
+        settings=user.settings or {},
+    )
+
+
+@router.patch("/me", response_model=UserResponse)
+async def update_profile(
+    body: UpdateProfileRequest,
+    user: CurrentUser,
+):
+    """Update current user profile."""
+    if body.city:
+        user.city = body.city
+    if body.area:
+        user.area = body.area
+
+    return UserResponse(
+        id=str(user.id),
+        telegram_id=user.telegram_id,
+        username=user.username,
+        first_name=user.first_name,
+        last_name=user.last_name,
+        photo_url=user.photo_url,
+        is_premium=user.is_premium,
+        language_code=user.language_code,
+        phone=user.phone,
+        is_phone_verified=user.is_phone_verified,
+        city=user.city,
+        area=user.area,
+        rating=user.rating,
+        total_sales=user.total_sales,
+        total_listings=user.total_listings,
+        is_verified_seller=user.is_verified_seller,
+        settings=user.settings or {},
+    )
+
+
+@router.post("/me/verify-phone", response_model=UserResponse)
+async def verify_phone(
+    body: VerifyPhoneRequest,
+    user: CurrentUser,
+):
+    """Verify user's phone number from Telegram contact share."""
+    # Clean phone number
+    phone = body.phone_number.strip().replace(" ", "").replace("-", "")
+    
+    # Ensure it starts with + or country code
+    if not phone.startswith("+"):
+        if phone.startswith("0"):
+            phone = "+251" + phone[1:]  # Ethiopia
+        elif phone.startswith("251"):
+            phone = "+" + phone
+        else:
+            phone = "+251" + phone
+    
+    # Update user
+    user.phone = phone
+    user.is_phone_verified = True
+    user.phone_verified_at = datetime.now(UTC)
+    
+    return UserResponse(
+        id=str(user.id),
+        telegram_id=user.telegram_id,
+        username=user.username,
+        first_name=user.first_name,
+        last_name=user.last_name,
+        photo_url=user.photo_url,
+        is_premium=user.is_premium,
+        language_code=user.language_code,
+        phone=user.phone,
+        is_phone_verified=user.is_phone_verified,
+        city=user.city,
+        area=user.area,
+        rating=user.rating,
+        total_sales=user.total_sales,
+        total_listings=user.total_listings,
+        is_verified_seller=user.is_verified_seller,
         settings=user.settings or {},
     )
 
@@ -65,5 +170,13 @@ async def update_settings(
         photo_url=user.photo_url,
         is_premium=user.is_premium,
         language_code=user.language_code,
+        phone=user.phone,
+        is_phone_verified=user.is_phone_verified,
+        city=user.city,
+        area=user.area,
+        rating=user.rating,
+        total_sales=user.total_sales,
+        total_listings=user.total_listings,
+        is_verified_seller=user.is_verified_seller,
         settings=user.settings,
     )

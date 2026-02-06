@@ -104,6 +104,8 @@ interface WebApp {
   showConfirm: (message: string, callback?: (confirmed: boolean) => void) => void;
   requestFullscreen?: () => void;
   exitFullscreen?: () => void;
+  requestContact?: (callback: (sent: boolean) => void) => void;
+  requestWriteAccess?: (callback: (granted: boolean) => void) => void;
 }
 
 declare global {

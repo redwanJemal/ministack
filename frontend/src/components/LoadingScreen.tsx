@@ -1,11 +1,13 @@
 /**
  * Full-screen loading indicator
  */
-export function LoadingScreen() {
+export default function LoadingScreen() {
   return (
     <div className="flex flex-col items-center justify-center min-h-screen bg-tg-bg">
-      <div className="w-12 h-12 border-4 border-tg-button border-t-transparent rounded-full animate-spin" />
-      <p className="mt-4 text-tg-hint text-sm">Loading...</p>
+      <p className="text-5xl mb-4">🛒</p>
+      <h1 className="text-2xl font-bold text-tg-text">ገበያ</h1>
+      <p className="text-sm text-tg-hint mt-1">Ethiopian Marketplace</p>
+      <div className="w-8 h-8 border-3 border-tg-button border-t-transparent rounded-full animate-spin mt-6" />
     </div>
   );
 }

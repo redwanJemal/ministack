@@ -1,132 +1,279 @@
-import { Link } from 'react-router-dom';
+import { useEffect, useState } from 'react';
+import { Search, Plus, Heart, MapPin, Verified, RefreshCw } from 'lucide-react';
 import { useTelegram } from '@/lib/telegram';
-import { User, Settings, Zap, Star, CheckCircle, Database } from 'lucide-react';
+import { useAuth } from '@/hooks/useAuth';
+import { categoriesApi, listingsApi, type Category, type Listing } from '@/lib/api';
 
-interface Props {
-  user: {
-    id: string;
-    telegram_id: number;
-    username: string | null;
-    first_name: string;
-    last_name: string | null;
-    photo_url: string | null;
-    is_premium: boolean;
-  } | null;
+export default function HomePage() {
+  const { haptic } = useTelegram();
+  const { user, isAuthenticated } = useAuth();
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [listings, setListings] = useState<Listing[]>([]);
+  const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+
+  // Fetch data on mount
+  useEffect(() => {
+    loadData();
+  }, []);
+
+  // Refetch when category changes
+  useEffect(() => {
+    loadListings();
+  }, [selectedCategory, searchQuery]);
+
+  const loadData = async () => {
+    setLoading(true);
+    try {
+      const [cats, list] = await Promise.all([
+        categoriesApi.list(),
+        listingsApi.list({ per_page: 20 }),
+      ]);
+      setCategories(cats);
+      setListings(list.items);
+    } catch (error) {
+      console.error('Failed to load data:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const loadListings = async () => {
+    try {
+      const result = await listingsApi.list({
+        category: selectedCategory || undefined,
+        search: searchQuery || undefined,
+        per_page: 20,
+      });
+      setListings(result.items);
+    } catch (error) {
+      console.error('Failed to load listings:', error);
+    }
+  };
+
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    haptic.impact('light');
+    await loadData();
+    setRefreshing(false);
+  };
+
+  const handleCategorySelect = (categoryId: string | null) => {
+    haptic.selection();
+    setSelectedCategory(categoryId === selectedCategory ? null : categoryId);
+  };
+
+  const formatPrice = (price: number) => {
+    return new Intl.NumberFormat('en-ET').format(price) + ' ብር';
+  };
+
+  const getTimeAgo = (dateStr: string) => {
+    const date = new Date(dateStr);
+    const now = new Date();
+    const diffMs = now.getTime() - date.getTime();
+    const diffMins = Math.floor(diffMs / 60000);
+    const diffHours = Math.floor(diffMs / 3600000);
+    const diffDays = Math.floor(diffMs / 86400000);
+
+    if (diffMins < 60) return `${diffMins} ደቂቃ`;
+    if (diffHours < 24) return `${diffHours} ሰዓት`;
+    if (diffDays < 7) return `${diffDays} ቀን`;
+    return date.toLocaleDateString('am-ET');
+  };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-4 border-tg-button border-t-transparent" />
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen pb-20">
+      {/* Header */}
+      <div className="sticky top-0 z-10 bg-tg-bg px-4 py-3 border-b border-tg-secondary-bg">
+        <div className="flex items-center gap-3">
+          <div className="flex-1 relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-tg-hint" />
+            <input
+              type="text"
+              placeholder="ይፈልጉ... / Search..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full pl-10 pr-4 py-2.5 bg-tg-secondary-bg rounded-xl text-tg-text placeholder:text-tg-hint focus:outline-none focus:ring-2 focus:ring-tg-button"
+            />
+          </div>
+          <button
+            onClick={handleRefresh}
+            className="p-2.5 bg-tg-secondary-bg rounded-xl"
+            disabled={refreshing}
+          >
+            <RefreshCw className={`w-5 h-5 text-tg-hint ${refreshing ? 'animate-spin' : ''}`} />
+          </button>
+        </div>
+        
+        {/* Location */}
+        <div className="flex items-center gap-1 mt-2 text-sm text-tg-hint">
+          <MapPin className="w-4 h-4" />
+          <span>{user?.city || 'አዲስ አበባ'}</span>
+          {user?.area && <span>• {user.area}</span>}
+        </div>
+      </div>
+
+      {/* Categories */}
+      <div className="px-4 py-3">
+        <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
+          <button
+            onClick={() => handleCategorySelect(null)}
+            className={`flex-shrink-0 px-4 py-2 rounded-full text-sm font-medium transition-colors ${
+              !selectedCategory
+                ? 'bg-tg-button text-tg-button-text'
+                : 'bg-tg-secondary-bg text-tg-text'
+            }`}
+          >
+            ሁሉም
+          </button>
+          {categories.map((cat) => (
+            <button
+              key={cat.id}
+              onClick={() => handleCategorySelect(cat.id)}
+              className={`flex-shrink-0 px-4 py-2 rounded-full text-sm font-medium transition-colors flex items-center gap-1.5 ${
+                selectedCategory === cat.id
+                  ? 'bg-tg-button text-tg-button-text'
+                  : 'bg-tg-secondary-bg text-tg-text'
+              }`}
+            >
+              <span>{cat.icon}</span>
+              <span>{cat.name_am}</span>
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Listings Grid */}
+      <div className="px-4">
+        {listings.length === 0 ? (
+          <div className="text-center py-12">
+            <p className="text-tg-hint text-lg">ምንም ዕቃ አልተገኘም</p>
+            <p className="text-tg-hint text-sm mt-1">No listings found</p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-2 gap-3">
+            {listings.map((listing) => (
+              <ListingCard key={listing.id} listing={listing} formatPrice={formatPrice} getTimeAgo={getTimeAgo} />
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* FAB - Post Listing */}
+      {isAuthenticated && (
+        <button
+          onClick={() => {
+            haptic.impact('medium');
+            // TODO: Navigate to create listing
+            alert('Coming soon: Post a listing');
+          }}
+          className="fixed bottom-6 right-6 w-14 h-14 bg-tg-button text-tg-button-text rounded-full shadow-lg flex items-center justify-center active:scale-95 transition-transform"
+        >
+          <Plus className="w-7 h-7" />
+        </button>
+      )}
+    </div>
+  );
 }
 
-export function HomePage({ user }: Props) {
-  const { haptic, colorScheme } = useTelegram();
+interface ListingCardProps {
+  listing: Listing;
+  formatPrice: (price: number) => string;
+  getTimeAgo: (date: string) => string;
+}
 
-  const handleFeatureClick = () => {
-    haptic.impact('medium');
-    // Add your feature logic here
+function ListingCard({ listing, formatPrice, getTimeAgo }: ListingCardProps) {
+  const { haptic } = useTelegram();
+  const [isFavorited, setIsFavorited] = useState(listing.is_favorited || false);
+
+  const handleFavorite = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    haptic.impact('light');
+    
+    try {
+      const result = await listingsApi.toggleFavorite(listing.id);
+      setIsFavorited(result.favorited);
+    } catch (error) {
+      console.error('Failed to toggle favorite:', error);
+    }
+  };
+
+  const handleClick = () => {
+    haptic.selection();
+    // TODO: Navigate to listing detail
+    alert(`View listing: ${listing.title}`);
   };
 
   return (
-    <div className="container py-6">
-      {/* Header */}
-      <div className="flex items-center justify-between mb-8">
-        <div>
-          <h1 className="text-2xl font-bold">
-            Welcome{user ? `, ${user.first_name}` : ''}! 👋
-          </h1>
-          <p className="text-tg-hint text-sm mt-1">
-            Your Mini App is ready
-          </p>
-        </div>
-        <Link
-          to="/profile"
-          className="w-10 h-10 rounded-full bg-tg-secondary-bg flex items-center justify-center"
-          onClick={() => haptic.selection()}
-        >
-          {user?.photo_url ? (
-            <img
-              src={user.photo_url}
-              alt={user.first_name}
-              className="w-full h-full rounded-full object-cover"
-            />
-          ) : (
-            <User className="w-5 h-5 text-tg-hint" />
-          )}
-        </Link>
-      </div>
-
-      {/* Premium Badge */}
-      {user?.is_premium && (
-        <div className="flex items-center gap-2 px-3 py-2 bg-gradient-to-r from-yellow-500/10 to-orange-500/10 rounded-lg border border-yellow-500/20 mb-6">
-          <Star className="w-4 h-4 text-yellow-500 fill-yellow-500" />
-          <span className="text-sm font-medium">Telegram Premium</span>
-        </div>
-      )}
-
-      {/* Feature Cards */}
-      <div className="space-y-3">
-        <h2 className="text-lg font-semibold mb-3">Features</h2>
+    <div
+      onClick={handleClick}
+      className="bg-tg-secondary-bg rounded-xl overflow-hidden cursor-pointer active:scale-[0.98] transition-transform"
+    >
+      {/* Image */}
+      <div className="relative aspect-square bg-tg-bg">
+        {listing.images && listing.images.length > 0 ? (
+          <img
+            src={listing.images[0]}
+            alt={listing.title}
+            className="w-full h-full object-cover"
+          />
+        ) : (
+          <div className="w-full h-full flex items-center justify-center text-4xl">
+            📦
+          </div>
+        )}
         
+        {/* Featured Badge */}
+        {listing.is_featured && (
+          <div className="absolute top-2 left-2 bg-yellow-500 text-white text-xs px-2 py-0.5 rounded-full">
+            ⭐ Featured
+          </div>
+        )}
+        
+        {/* Favorite Button */}
         <button
-          onClick={handleFeatureClick}
-          className="w-full p-4 bg-tg-secondary-bg rounded-xl flex items-center gap-4 active:scale-[0.98] transition-transform"
+          onClick={handleFavorite}
+          className="absolute top-2 right-2 w-8 h-8 bg-black/40 rounded-full flex items-center justify-center"
         >
-          <div className="w-12 h-12 rounded-xl bg-tg-button/10 flex items-center justify-center">
-            <Zap className="w-6 h-6 text-tg-button" />
-          </div>
-          <div className="flex-1 text-left">
-            <h3 className="font-medium">Quick Action</h3>
-            <p className="text-sm text-tg-hint">Tap to trigger haptic feedback</p>
-          </div>
-        </button>
-
-        <button
-          onClick={handleFeatureClick}
-          className="w-full p-4 bg-tg-secondary-bg rounded-xl flex items-center gap-4 active:scale-[0.98] transition-transform"
-        >
-          <div className="w-12 h-12 rounded-xl bg-green-500/10 flex items-center justify-center">
-            <Settings className="w-6 h-6 text-green-500" />
-          </div>
-          <div className="flex-1 text-left">
-            <h3 className="font-medium">Settings</h3>
-            <p className="text-sm text-tg-hint">Configure your preferences</p>
-          </div>
+          <Heart
+            className={`w-4 h-4 ${isFavorited ? 'fill-red-500 text-red-500' : 'text-white'}`}
+          />
         </button>
       </div>
 
-      {/* Info Section */}
-      <div className="mt-8 p-4 bg-tg-secondary-bg rounded-xl">
-        <h3 className="font-medium mb-2 flex items-center gap-2">
-          <Database className="w-4 h-4" />
-          Session Info
-        </h3>
-        <div className="space-y-2 text-sm">
-          <div className="flex justify-between items-center">
-            <span className="text-tg-hint">Auth Status</span>
-            <span className="flex items-center gap-1 text-green-500">
-              <CheckCircle className="w-4 h-4" />
-              {user?.id === 'dev-user' ? 'Demo Mode' : 'Authenticated'}
-            </span>
+      {/* Info */}
+      <div className="p-3">
+        <p className="font-bold text-tg-text truncate">{formatPrice(listing.price)}</p>
+        <p className="text-sm text-tg-text truncate mt-0.5">{listing.title}</p>
+        
+        <div className="flex items-center justify-between mt-2 text-xs text-tg-hint">
+          <div className="flex items-center gap-1">
+            <MapPin className="w-3 h-3" />
+            <span className="truncate">{listing.area || listing.city}</span>
           </div>
-          <div className="flex justify-between">
-            <span className="text-tg-hint">Theme</span>
-            <span className="capitalize">{colorScheme}</span>
-          </div>
-          <div className="flex justify-between">
-            <span className="text-tg-hint">Telegram ID</span>
-            <span className="font-mono text-xs">{user?.telegram_id || 'N/A'}</span>
-          </div>
-          <div className="flex justify-between">
-            <span className="text-tg-hint">Username</span>
-            <span>@{user?.username || 'none'}</span>
-          </div>
-          <div className="flex justify-between">
-            <span className="text-tg-hint">Internal ID</span>
-            <span className="font-mono text-xs">{user?.id?.slice(0, 8) || 'N/A'}...</span>
-          </div>
+          <span>{getTimeAgo(listing.created_at)}</span>
         </div>
-      </div>
 
-      {/* Footer */}
-      <p className="text-center text-tg-hint text-xs mt-8">
-        Built with MiniStack 🚀
-      </p>
+        {/* Seller Info */}
+        {listing.seller && (
+          <div className="flex items-center gap-1 mt-2 text-xs text-tg-hint">
+            <span className="truncate">{listing.seller.name}</span>
+            {listing.seller.is_verified && (
+              <Verified className="w-3 h-3 text-blue-500" />
+            )}
+          </div>
+        )}
+      </div>
     </div>
   );
 }

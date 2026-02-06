@@ -1,10 +1,9 @@
 /**
- * API Client for backend communication
+ * API client for Gebeya backend
  */
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+const API_URL = import.meta.env.VITE_API_URL || '/api/v1';
 
-// Token storage
 let accessToken: string | null = null;
 
 export function setAccessToken(token: string | null) {
@@ -23,95 +22,114 @@ export function getAccessToken(): string | null {
   return accessToken;
 }
 
-// API Error class
-export class ApiError extends Error {
-  status: number;
-  data: unknown;
-
-  constructor(message: string, status: number, data?: unknown) {
-    super(message);
-    this.name = 'ApiError';
-    this.status = status;
-    this.data = data;
-  }
-}
-
-// Base fetch function
-async function fetchApi<T>(
+async function request<T>(
   endpoint: string,
   options: RequestInit = {}
 ): Promise<T> {
-  const url = `${API_URL}/api/v1${endpoint}`;
   const token = getAccessToken();
-
   const headers: HeadersInit = {
     'Content-Type': 'application/json',
+    ...(token && { Authorization: `Bearer ${token}` }),
     ...options.headers,
   };
 
-  if (token) {
-    (headers as Record<string, string>)['Authorization'] = `Bearer ${token}`;
-  }
-
-  const response = await fetch(url, {
+  const response = await fetch(`${API_URL}${endpoint}`, {
     ...options,
     headers,
   });
 
   if (!response.ok) {
-    let errorData;
-    try {
-      errorData = await response.json();
-    } catch {
-      errorData = { detail: 'An error occurred' };
-    }
-    throw new ApiError(
-      errorData.detail || 'Request failed',
-      response.status,
-      errorData
-    );
+    const error = await response.json().catch(() => ({ detail: 'Unknown error' }));
+    throw new Error(error.detail || `HTTP ${response.status}`);
   }
 
-  // Handle empty responses
-  const text = await response.text();
-  if (!text) return {} as T;
-
-  return JSON.parse(text);
+  return response.json();
 }
-
-// API methods
-export const api = {
-  get: <T>(endpoint: string) => fetchApi<T>(endpoint, { method: 'GET' }),
-
-  post: <T>(endpoint: string, data?: unknown) =>
-    fetchApi<T>(endpoint, {
-      method: 'POST',
-      body: data ? JSON.stringify(data) : undefined,
-    }),
-
-  patch: <T>(endpoint: string, data?: unknown) =>
-    fetchApi<T>(endpoint, {
-      method: 'PATCH',
-      body: data ? JSON.stringify(data) : undefined,
-    }),
-
-  put: <T>(endpoint: string, data?: unknown) =>
-    fetchApi<T>(endpoint, {
-      method: 'PUT',
-      body: data ? JSON.stringify(data) : undefined,
-    }),
-
-  delete: <T>(endpoint: string) => fetchApi<T>(endpoint, { method: 'DELETE' }),
-};
 
 // Auth API
-interface AuthResponse {
-  access_token: string;
-  token_type: string;
-  user: User;
-}
+export const authApi = {
+  telegram: (initData: string) =>
+    request<{ access_token: string; user: User }>('/auth/telegram', {
+      method: 'POST',
+      body: JSON.stringify({ init_data: initData }),
+    }),
+};
 
-interface User {
+// Users API
+export const usersApi = {
+  me: () => request<User>('/users/me'),
+  updateProfile: (data: { city?: string; area?: string }) =>
+    request<User>('/users/me', {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    }),
+  verifyPhone: (phoneNumber: string) =>
+    request<User>('/users/me/verify-phone', {
+      method: 'POST',
+      body: JSON.stringify({ phone_number: phoneNumber }),
+    }),
+  updateSettings: (settings: Record<string, any>) =>
+    request<User>('/users/me/settings', {
+      method: 'PATCH',
+      body: JSON.stringify({ settings }),
+    }),
+};
+
+// Categories API
+export const categoriesApi = {
+  list: () => request<Category[]>('/categories'),
+  get: (slug: string) => request<Category>(`/categories/${slug}`),
+};
+
+// Listings API
+export const listingsApi = {
+  list: (params: ListingsParams = {}) => {
+    const searchParams = new URLSearchParams();
+    if (params.page) searchParams.set('page', String(params.page));
+    if (params.per_page) searchParams.set('per_page', String(params.per_page));
+    if (params.category) searchParams.set('category', params.category);
+    if (params.search) searchParams.set('search', params.search);
+    if (params.min_price) searchParams.set('min_price', String(params.min_price));
+    if (params.max_price) searchParams.set('max_price', String(params.max_price));
+    if (params.condition) searchParams.set('condition', params.condition);
+    if (params.city) searchParams.set('city', params.city);
+    
+    const query = searchParams.toString();
+    return request<ListingsResponse>(`/listings${query ? `?${query}` : ''}`);
+  },
+  
+  get: (id: string) => request<Listing>(`/listings/${id}`),
+  
+  create: (data: CreateListing) =>
+    request<Listing>('/listings', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+  
+  update: (id: string, data: Partial<CreateListing>) =>
+    request<Listing>(`/listings/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    }),
+  
+  delete: (id: string) =>
+    request<{ message: string }>(`/listings/${id}`, {
+      method: 'DELETE',
+    }),
+  
+  my: (status?: string) => {
+    const query = status ? `?status=${status}` : '';
+    return request<Listing[]>(`/listings/my${query}`);
+  },
+  
+  toggleFavorite: (id: string) =>
+    request<{ favorited: boolean }>(`/listings/${id}/favorite`, {
+      method: 'POST',
+    }),
+};
+
+// Types
+export interface User {
   id: string;
   telegram_id: number;
   username: string | null;
@@ -120,36 +138,85 @@ interface User {
   photo_url: string | null;
   is_premium: boolean;
   language_code: string | null;
-  settings?: Record<string, unknown>;
+  phone: string | null;
+  is_phone_verified: boolean;
+  city: string;
+  area: string | null;
+  rating: number;
+  total_sales: number;
+  total_listings: number;
+  is_verified_seller: boolean;
+  settings: Record<string, any>;
 }
 
-export const authApi = {
-  /**
-   * Authenticate with Telegram initData
-   */
-  login: async (initData: string): Promise<AuthResponse> => {
-    const response = await api.post<AuthResponse>('/auth/telegram', {
-      init_data: initData,
-    });
-    setAccessToken(response.access_token);
-    return response;
-  },
+export interface Category {
+  id: string;
+  name_am: string;
+  name_en: string;
+  icon: string;
+  slug: string;
+  parent_id: string | null;
+}
 
-  /**
-   * Get current user
-   */
-  getMe: () => api.get<User>('/users/me'),
+export interface SellerInfo {
+  id: string;
+  name: string;
+  username: string | null;
+  is_verified: boolean;
+  rating: number;
+  total_sales: number;
+  member_since: string;
+}
 
-  /**
-   * Update user settings
-   */
-  updateSettings: (settings: Record<string, unknown>) =>
-    api.patch<User>('/users/me/settings', { settings }),
+export interface Listing {
+  id: string;
+  title: string;
+  description: string | null;
+  price: number;
+  currency: string;
+  is_negotiable: boolean;
+  condition: 'new' | 'like_new' | 'used' | 'for_parts';
+  images: string[];
+  city: string;
+  area: string | null;
+  status: 'draft' | 'active' | 'sold' | 'expired' | 'deleted';
+  views_count: number;
+  favorites_count: number;
+  is_featured: boolean;
+  created_at: string;
+  category_id: string;
+  category_name?: string;
+  seller?: SellerInfo;
+  is_favorited?: boolean;
+}
 
-  /**
-   * Logout (clear token)
-   */
-  logout: () => {
-    setAccessToken(null);
-  },
-};
+export interface ListingsParams {
+  page?: number;
+  per_page?: number;
+  category?: string;
+  search?: string;
+  min_price?: number;
+  max_price?: number;
+  condition?: string;
+  city?: string;
+}
+
+export interface ListingsResponse {
+  items: Listing[];
+  total: number;
+  page: number;
+  per_page: number;
+  has_more: boolean;
+}
+
+export interface CreateListing {
+  title: string;
+  description?: string;
+  price: number;
+  category_id: string;
+  condition?: 'new' | 'like_new' | 'used' | 'for_parts';
+  is_negotiable?: boolean;
+  city?: string;
+  area?: string;
+  images?: string[];
+}

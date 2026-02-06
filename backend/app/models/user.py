@@ -3,9 +3,9 @@
 import uuid
 from datetime import UTC, datetime
 
-from sqlalchemy import BigInteger, Boolean, DateTime, String, func
+from sqlalchemy import BigInteger, Boolean, DateTime, Float, Integer, String, func
 from sqlalchemy.dialects.postgresql import JSONB, UUID
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
 
@@ -32,6 +32,21 @@ class User(Base):
     language_code: Mapped[str | None] = mapped_column(String(10))
     photo_url: Mapped[str | None] = mapped_column(String(500))
     is_premium: Mapped[bool] = mapped_column(Boolean, default=False)
+    
+    # Phone verification (for marketplace trust)
+    phone: Mapped[str | None] = mapped_column(String(20), index=True)
+    is_phone_verified: Mapped[bool] = mapped_column(Boolean, default=False)
+    phone_verified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    
+    # Location
+    city: Mapped[str] = mapped_column(String(100), default="Addis Ababa")
+    area: Mapped[str | None] = mapped_column(String(100))
+    
+    # Seller stats
+    rating: Mapped[float] = mapped_column(Float, default=0.0)
+    total_ratings: Mapped[int] = mapped_column(Integer, default=0)
+    total_sales: Mapped[int] = mapped_column(Integer, default=0)
+    total_listings: Mapped[int] = mapped_column(Integer, default=0)
 
     # App-specific data
     settings: Mapped[dict] = mapped_column(JSONB, default=dict)
@@ -40,6 +55,7 @@ class User(Base):
     # Status
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     is_banned: Mapped[bool] = mapped_column(Boolean, default=False)
+    is_verified_seller: Mapped[bool] = mapped_column(Boolean, default=False)
 
     # Timestamps
     created_at: Mapped[datetime] = mapped_column(
@@ -49,6 +65,10 @@ class User(Base):
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
     last_seen_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    
+    # Relationships
+    listings = relationship("Listing", back_populates="user", cascade="all, delete-orphan")
+    favorites = relationship("Favorite", back_populates="user", cascade="all, delete-orphan")
 
     def __repr__(self) -> str:
         return f"<User {self.telegram_id} (@{self.username})>"
@@ -62,3 +82,15 @@ class User(Base):
         self.photo_url = tg_user.get("photo_url")
         self.is_premium = tg_user.get("is_premium", False)
         self.last_seen_at = datetime.now(UTC)
+    
+    @property
+    def display_name(self) -> str:
+        """Get display name."""
+        if self.first_name and self.last_name:
+            return f"{self.first_name} {self.last_name}"
+        return self.first_name or self.username or "User"
+    
+    @property
+    def is_verified(self) -> bool:
+        """Check if user is verified (phone verified)."""
+        return self.is_phone_verified
